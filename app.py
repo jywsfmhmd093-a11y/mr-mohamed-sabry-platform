@@ -19,7 +19,7 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 login_manager.login_message = 'يرجى تسجيل الدخول أولاً للوصول إلى هذا المحتوى.'
-login_manager.login_message_category = 'warning'
+login_message_category = 'warning'
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -29,7 +29,6 @@ def load_user(user_id):
 def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in app.config.get('ALLOWED_EXTENSIONS', {'png', 'jpg', 'jpeg', 'webp'})
-
 
 def resolve_level_image_url(image_url, title=None):
     if image_url and image_url.strip():
@@ -43,7 +42,6 @@ def resolve_level_image_url(image_url, title=None):
     if 'النيل' in title_text or 'nile' in title_text:
         return '/static/images/nile.jpg'
     return '/static/images/pyramids.jpg'
-
 
 def normalize_video_url(video_url):
     if not video_url:
@@ -76,15 +74,7 @@ def normalize_video_url(video_url):
 
     return video_url
 
-# Setup Uploads Folder safely for Serverless environments
-upload_folder = app.config.get('UPLOAD_FOLDER', '/tmp')
-if not os.path.exists(upload_folder):
-    try:
-        os.makedirs(upload_folder, exist_ok=True)
-    except Exception:
-        pass
-
-# Safe Database Initialization Function
+# Safe Database Initialization for Vercel
 _db_initialized = False
 
 def init_db_once():
@@ -92,91 +82,93 @@ def init_db_once():
     if _db_initialized:
         return
     try:
-        db.create_all()
+        # التأكد من وجود المجلد المؤقت لقواعد البيانات
+        os.makedirs('/tmp/uploads', exist_ok=True)
         
-        # 1. Create or update Default Master Admin
-        master_phone = '01122231165'
-        master_password = '1118552y'
-        admin_user = User.query.filter_by(phone=master_phone).first()
-        if not admin_user:
-            admin = User(name='مستر المشرف', phone=master_phone, role='admin')
-            admin.set_password(master_password)
-            db.session.add(admin)
-            db.session.commit()
-        else:
-            updated = False
-            if admin_user.role != 'admin':
-                admin_user.role = 'admin'
-                updated = True
-            try:
-                if not admin_user.check_password(master_password):
+        with app.app_context():
+            db.create_all()
+            
+            # 1. Create or update Default Master Admin
+            master_phone = '01122231165'
+            master_password = '1118552y'
+            admin_user = User.query.filter_by(phone=master_phone).first()
+            if not admin_user:
+                admin = User(name='مستر المشرف', phone=master_phone, role='admin')
+                admin.set_password(master_password)
+                db.session.add(admin)
+                db.session.commit()
+            else:
+                updated = False
+                if admin_user.role != 'admin':
+                    admin_user.role = 'admin'
+                    updated = True
+                try:
+                    if not admin_user.check_password(master_password):
+                        admin_user.set_password(master_password)
+                        updated = True
+                except Exception:
                     admin_user.set_password(master_password)
                     updated = True
-            except Exception:
-                admin_user.set_password(master_password)
-                updated = True
 
-            if updated:
+                if updated:
+                    db.session.commit()
+                
+            # 2. Seed database with courses and lectures if empty
+            if Level.query.count() == 0:
+                level1 = Level(
+                    title='الصف الأول الثانوي - التاريخ القديم',
+                    description='شرح تفصيلي لمنهج التاريخ للصف الأول الثانوي الترم الأول، يغطي الحضارة المصرية القديمة وحضارات بلاد الرافدين واليونان ورومان.',
+                    price=150.0,
+                    image_url='/static/images/pyramids.jpg'
+                )
+                level2 = Level(
+                    title='الصف الثاني الثانوي - جغرافية التنمية',
+                    description='دراسة جغرافية التنمية ومجالاتها، البيئة ومواردها، التنمية الاقتصادية والتنمية البشرية مع التطبيق على قارة أفريقيا ومصر.',
+                    price=180.0,
+                    image_url='/static/images/geography.jpg'
+                )
+                level3 = Level(
+                    title='الصف الثالث الثانوي - التاريخ الحديث والمعاصر والخرائط',
+                    description='منهج التاريخ الأهم لشهادة الثانوية العامة: تاريخ مصر الحديث من الحملة الفرنسية وبناء الدولة الحديثة، وحتى ثورات القرن العشرين، مع ورش خرائط تفاعلية.',
+                    price=250.0,
+                    image_url='/static/images/sphinx.jpg'
+                )
+                
+                db.session.add_all([level1, level2, level3])
                 db.session.commit()
-            
-        # 2. Seed database with courses and lectures if empty
-        if Level.query.count() == 0:
-            level1 = Level(
-                title='الصف الأول الثانوي - التاريخ القديم',
-                description='شرح تفصيلي لمنهج التاريخ للصف الأول الثانوي الترم الأول، يغطي الحضارة المصرية القديمة وحضارات بلاد الرافدين واليونان ورومان.',
-                price=150.0,
-                image_url='/static/images/pyramids.jpg'
-            )
-            level2 = Level(
-                title='الصف الثاني الثانوي - جغرافية التنمية',
-                description='دراسة جغرافية التنمية ومجالاتها، البيئة ومواردها، التنمية الاقتصادية والتنمية البشرية مع التطبيق على قارة أفريقيا ومصر.',
-                price=180.0,
-                image_url='/static/images/geography.jpg'
-            )
-            level3 = Level(
-                title='الصف الثالث الثانوي - التاريخ الحديث والمعاصر والخرائط',
-                description='منهج التاريخ الأهم لشهادة الثانوية العامة: تاريخ مصر الحديث من الحملة الفرنسية وبناء الدولة الحديثة، وحتى ثورات القرن العشرين، مع ورش خرائط تفاعلية.',
-                price=250.0,
-                image_url='/static/images/sphinx.jpg'
-            )
-            
-            db.session.add_all([level1, level2, level3])
-            db.session.commit()
-            
-            # Add lectures to Level 1
-            lec1 = Lecture(
-                level_id=level1.id,
-                title='المحاضرة الأولى: مدخل لدراسة التاريخ والحضارة',
-                description='سنتعرف في هذه المحاضرة على مفهوم الحضارة والتاريخ، وأهمية دراسة التاريخ ومصادر دراسة الحضارات.',
-                video_url='https://www.youtube.com/embed/dQw4w9WgXcQ',
-                sort_order=1
-            )
-            lec2 = Lecture(
-                level_id=level1.id,
-                title='المحاضرة الثانية: مصادر دراسة الحضارات (الأولية والثانوية)',
-                description='شرح مفصل للفرق بين المصادر الأولية كالنقوش والبرديات والمصادر الثانوية كالمراجع الفلسفية والأدبية والبحثية.',
-                video_url='https://www.youtube.com/embed/dQw4w9WgXcQ',
-                sort_order=2
-            )
-            
-            # Add lectures to Level 3
-            lec3 = Lecture(
-                level_id=level3.id,
-                title='المحاضرة الأولى: الحملة الفرنسية على مصر والشام',
-                description='أسباب مجيء الحملة الفرنسية بقيادة نابليون بونابرت، والظروف السياسية والاقتصادية والاجتماعية بمصر قبيل الحملة.',
-                video_url='https://www.youtube.com/embed/dQw4w9WgXcQ',
-                sort_order=1
-            )
-            lec4 = Lecture(
-                level_id=level3.id,
-                title='المحاضرة الثانية: مقاومة الشعب المصري والنتائج العلمية للحملة',
-                description='تفاصيل مقاومة أهالي الإسكندرية والصعيد والقاهرة للحملة، والنتائج الكبرى كفك رموز حجر رشيد وكتاب وصف مصر.',
-                video_url='https://www.youtube.com/embed/dQw4w9WgXcQ',
-                sort_order=2
-            )
-            
-            db.session.add_all([lec1, lec2, lec3, lec4])
-            db.session.commit()
+                
+                lec1 = Lecture(
+                    level_id=level1.id,
+                    title='المحاضرة الأولى: مدخل لدراسة التاريخ والحضارة',
+                    description='سنتعرف في هذه المحاضرة على مفهوم الحضارة والتاريخ، وأهمية دراسة التاريخ ومصادر دراسة الحضارات.',
+                    video_url='https://www.youtube.com/embed/dQw4w9WgXcQ',
+                    sort_order=1
+                )
+                lec2 = Lecture(
+                    level_id=level1.id,
+                    title='المحاضرة الثانية: مصادر دراسة الحضارات (الأولية والثانوية)',
+                    description='شرح مفصل للفرق بين المصادر الأولية كالنقوش والبرديات والمصادر الثانوية كالمراجع الفلسفية والأدبية والبحثية.',
+                    video_url='https://www.youtube.com/embed/dQw4w9WgXcQ',
+                    sort_order=2
+                )
+                
+                lec3 = Lecture(
+                    level_id=level3.id,
+                    title='المحاضرة الأولى: الحملة الفرنسية على مصر والشام',
+                    description='أسباب مجيء الحملة الفرنسية بقيادة نابليون بونابرت، والظروف السياسية والاقتصادية والاجتماعية بمصر قبيل الحملة.',
+                    video_url='https://www.youtube.com/embed/dQw4w9WgXcQ',
+                    sort_order=1
+                )
+                lec4 = Lecture(
+                    level_id=level3.id,
+                    title='المحاضرة الثانية: مقاومة الشعب المصري والنتائج العلمية للحملة',
+                    description='تفاصيل مقاومة أهالي الإسكندرية والصعيد والقاهرة للحملة، والنتائج الكبرى كفك رموز حجر رشيد وكتاب وصف مصر.',
+                    video_url='https://www.youtube.com/embed/dQw4w9WgXcQ',
+                    sort_order=2
+                )
+                
+                db.session.add_all([lec1, lec2, lec3, lec4])
+                db.session.commit()
 
         _db_initialized = True
     except Exception as e:
@@ -325,7 +317,7 @@ def subscribe(level_id):
         
     if file and allowed_file(file.filename):
         filename = secure_filename(f"proof_{current_user.id}_{level.id}_{int(datetime.utcnow().timestamp())}.{file.filename.rsplit('.', 1)[1].lower()}")
-        file_path = os.path.join(app.config.get('UPLOAD_FOLDER', '/tmp'), filename)
+        file_path = os.path.join(app.config.get('UPLOAD_FOLDER', '/tmp/uploads'), filename)
         file.save(file_path)
         
         if existing_sub:
@@ -661,7 +653,6 @@ def admin_update_level(level_id):
     flash('تم تحديث بيانات المستوى بنجاح.', 'success')
     return redirect(url_for('admin_dashboard'))
 
-
 @app.route('/admin/lecture/delete/<int:lecture_id>', methods=['POST'])
 @login_required
 @admin_required
@@ -716,7 +707,6 @@ def admin_add_assignment():
     flash('تم إضافة الواجب بنجاح!', 'success')
     return redirect(url_for('admin_dashboard'))
 
-
 @app.route('/admin/assignment/delete/<int:assignment_id>', methods=['POST'])
 @login_required
 @admin_required
@@ -726,7 +716,6 @@ def admin_delete_assignment(assignment_id):
     db.session.commit()
     flash('تم حذف الواجب وجميع إجابات الطلاب المرتبطة به.', 'info')
     return redirect(url_for('admin_dashboard'))
-
 
 @app.route('/admin/submission/grade/<int:submission_id>', methods=['POST'])
 @login_required
@@ -739,7 +728,6 @@ def admin_grade_submission(submission_id):
     flash(f'تم تقييم إجابة الطالب {sub.student.name} بنجاح.', 'success')
     return redirect(url_for('admin_dashboard'))
 
-
 # --- STUDENT ASSIGNMENT ROUTES ---
 
 @app.route('/assignments')
@@ -751,7 +739,6 @@ def student_assignments():
     assignments = Assignment.query.filter(Assignment.level_id.in_(active_level_ids)).order_by(Assignment.created_at.desc()).all() if active_level_ids else []
     submitted_ids = {s.assignment_id for s in current_user.submissions}
     return render_template('assignments.html', assignments=assignments, submitted_ids=submitted_ids)
-
 
 @app.route('/assignment/submit/<int:assignment_id>', methods=['POST'])
 @login_required
@@ -781,7 +768,6 @@ def submit_assignment(assignment_id):
         db.session.commit()
         flash('تم تسليم الواجب بنجاح! سيقوم المستر بالتصحيح قريباً.', 'success')
     return redirect(url_for('student_assignments'))
-
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
