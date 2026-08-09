@@ -11,10 +11,8 @@ from models import db, User, Level, Lecture, Subscription, PaymentProof, Quiz, Q
 app = Flask(__name__)
 app.config.from_object(Config)
 
-# Initialize database
 db.init_app(app)
 
-# Initialize Login Manager
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
@@ -25,7 +23,6 @@ login_manager.login_message_category = 'warning'
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# Helper to check allowed file extensions
 def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in app.config.get('ALLOWED_EXTENSIONS', {'png', 'jpg', 'jpeg', 'webp'})
@@ -74,14 +71,12 @@ def normalize_video_url(video_url):
 
     return video_url
 
-# Context Processor to inject global data
 @app.context_processor
 def inject_global_data():
     return {
         'now': datetime.utcnow()
     }
 
-# Route for serving uploaded files
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
     upload_dir = app.config.get('UPLOAD_FOLDER', '/tmp/uploads')
@@ -188,7 +183,7 @@ def logout():
     flash('تم تسجيل الخروج بنجاح.', 'info')
     return redirect(url_for('index'))
 
-# --- STUDENT ROUTES ---
+# --- STUDENT DASHBOARD ROUTE ---
 
 @app.route('/dashboard')
 @login_required
@@ -199,12 +194,26 @@ def dashboard():
     levels = Level.query.all()
     user_subscriptions = {sub.level_id: sub for sub in current_user.subscriptions}
     
-    total_active_courses = sum(1 for sub in current_user.subscriptions if sub.status == 'active')
+    active_subscriptions_count = sum(1 for sub in current_user.subscriptions if sub.status == 'active')
+    pending_subscriptions_count = sum(1 for sub in current_user.subscriptions if sub.status == 'pending')
+    
     progress = 0
     if len(levels) > 0:
-        progress = int((total_active_courses / len(levels)) * 100)
+        progress = int((active_subscriptions_count / len(levels)) * 100)
         
-    return render_template('dashboard.html', levels=levels, user_subscriptions=user_subscriptions, progress=progress)
+    active_level_ids = [sub.level_id for sub in current_user.subscriptions if sub.status == 'active']
+    
+    upcoming_assignments = Assignment.query.filter(Assignment.level_id.in_(active_level_ids)).order_by(Assignment.created_at.desc()).limit(3).all() if active_level_ids else []
+    upcoming_quizzes = Quiz.query.filter(Quiz.course_id.in_(active_level_ids)).order_by(Quiz.id.desc()).limit(3).all() if active_level_ids else []
+
+    return render_template('dashboard.html', 
+                           levels=levels, 
+                           user_subscriptions=user_subscriptions, 
+                           progress=progress,
+                           active_count=active_subscriptions_count,
+                           pending_count=pending_subscriptions_count,
+                           upcoming_assignments=upcoming_assignments,
+                           upcoming_quizzes=upcoming_quizzes)
 
 @app.route('/subscribe/<int:level_id>', methods=['POST'])
 @login_required
