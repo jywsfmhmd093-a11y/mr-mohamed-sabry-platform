@@ -19,7 +19,7 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 login_manager.login_message = 'يرجى تسجيل الدخول أولاً للوصول إلى هذا المحتوى.'
-login_message_category = 'warning'
+login_manager.login_message_category = 'warning'
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -74,110 +74,6 @@ def normalize_video_url(video_url):
 
     return video_url
 
-# Safe Database Initialization for Vercel
-_db_initialized = False
-
-def init_db_once():
-    global _db_initialized
-    if _db_initialized:
-        return
-    try:
-        # التأكد من وجود المجلد المؤقت لقواعد البيانات
-        os.makedirs('/tmp/uploads', exist_ok=True)
-        
-        with app.app_context():
-            db.create_all()
-            
-            # 1. Create or update Default Master Admin
-            master_phone = '01122231165'
-            master_password = '1118552y'
-            admin_user = User.query.filter_by(phone=master_phone).first()
-            if not admin_user:
-                admin = User(name='مستر المشرف', phone=master_phone, role='admin')
-                admin.set_password(master_password)
-                db.session.add(admin)
-                db.session.commit()
-            else:
-                updated = False
-                if admin_user.role != 'admin':
-                    admin_user.role = 'admin'
-                    updated = True
-                try:
-                    if not admin_user.check_password(master_password):
-                        admin_user.set_password(master_password)
-                        updated = True
-                except Exception:
-                    admin_user.set_password(master_password)
-                    updated = True
-
-                if updated:
-                    db.session.commit()
-                
-            # 2. Seed database with courses and lectures if empty
-            if Level.query.count() == 0:
-                level1 = Level(
-                    title='الصف الأول الثانوي - التاريخ القديم',
-                    description='شرح تفصيلي لمنهج التاريخ للصف الأول الثانوي الترم الأول، يغطي الحضارة المصرية القديمة وحضارات بلاد الرافدين واليونان ورومان.',
-                    price=150.0,
-                    image_url='/static/images/pyramids.jpg'
-                )
-                level2 = Level(
-                    title='الصف الثاني الثانوي - جغرافية التنمية',
-                    description='دراسة جغرافية التنمية ومجالاتها، البيئة ومواردها، التنمية الاقتصادية والتنمية البشرية مع التطبيق على قارة أفريقيا ومصر.',
-                    price=180.0,
-                    image_url='/static/images/geography.jpg'
-                )
-                level3 = Level(
-                    title='الصف الثالث الثانوي - التاريخ الحديث والمعاصر والخرائط',
-                    description='منهج التاريخ الأهم لشهادة الثانوية العامة: تاريخ مصر الحديث من الحملة الفرنسية وبناء الدولة الحديثة، وحتى ثورات القرن العشرين، مع ورش خرائط تفاعلية.',
-                    price=250.0,
-                    image_url='/static/images/sphinx.jpg'
-                )
-                
-                db.session.add_all([level1, level2, level3])
-                db.session.commit()
-                
-                lec1 = Lecture(
-                    level_id=level1.id,
-                    title='المحاضرة الأولى: مدخل لدراسة التاريخ والحضارة',
-                    description='سنتعرف في هذه المحاضرة على مفهوم الحضارة والتاريخ، وأهمية دراسة التاريخ ومصادر دراسة الحضارات.',
-                    video_url='https://www.youtube.com/embed/dQw4w9WgXcQ',
-                    sort_order=1
-                )
-                lec2 = Lecture(
-                    level_id=level1.id,
-                    title='المحاضرة الثانية: مصادر دراسة الحضارات (الأولية والثانوية)',
-                    description='شرح مفصل للفرق بين المصادر الأولية كالنقوش والبرديات والمصادر الثانوية كالمراجع الفلسفية والأدبية والبحثية.',
-                    video_url='https://www.youtube.com/embed/dQw4w9WgXcQ',
-                    sort_order=2
-                )
-                
-                lec3 = Lecture(
-                    level_id=level3.id,
-                    title='المحاضرة الأولى: الحملة الفرنسية على مصر والشام',
-                    description='أسباب مجيء الحملة الفرنسية بقيادة نابليون بونابرت، والظروف السياسية والاقتصادية والاجتماعية بمصر قبيل الحملة.',
-                    video_url='https://www.youtube.com/embed/dQw4w9WgXcQ',
-                    sort_order=1
-                )
-                lec4 = Lecture(
-                    level_id=level3.id,
-                    title='المحاضرة الثانية: مقاومة الشعب المصري والنتائج العلمية للحملة',
-                    description='تفاصيل مقاومة أهالي الإسكندرية والصعيد والقاهرة للحملة، والنتائج الكبرى كفك رموز حجر رشيد وكتاب وصف مصر.',
-                    video_url='https://www.youtube.com/embed/dQw4w9WgXcQ',
-                    sort_order=2
-                )
-                
-                db.session.add_all([lec1, lec2, lec3, lec4])
-                db.session.commit()
-
-        _db_initialized = True
-    except Exception as e:
-        print(f"Database initialization error: {e}")
-
-@app.before_request
-def before_request():
-    init_db_once()
-
 # Context Processor to inject global data
 @app.context_processor
 def inject_global_data():
@@ -185,16 +81,26 @@ def inject_global_data():
         'now': datetime.utcnow()
     }
 
+# Route for serving uploaded files
+@app.route('/uploads/<path:filename>')
+def uploaded_file(filename):
+    upload_dir = app.config.get('UPLOAD_FOLDER', '/tmp/uploads')
+    return send_from_directory(upload_dir, filename)
+
 # --- PUBLIC ROUTES ---
 
 @app.route('/')
 def index():
-    levels = Level.query.all()
-    stats = {
-        'students': User.query.filter_by(role='student').count() + 1420,
-        'lectures': Lecture.query.count() + 85,
-        'levels': Level.query.count()
-    }
+    try:
+        levels = Level.query.all()
+        stats = {
+            'students': User.query.filter_by(role='student').count() + 1420,
+            'lectures': Lecture.query.count() + 85,
+            'levels': Level.query.count()
+        }
+    except Exception:
+        levels = []
+        stats = {'students': 1420, 'lectures': 85, 'levels': 0}
     return render_template('index.html', levels=levels, stats=stats)
 
 @app.route('/level/<int:level_id>')
@@ -316,8 +222,10 @@ def subscribe(level_id):
         return redirect(url_for('dashboard'))
         
     if file and allowed_file(file.filename):
+        upload_dir = app.config.get('UPLOAD_FOLDER', '/tmp/uploads')
+        os.makedirs(upload_dir, exist_ok=True)
         filename = secure_filename(f"proof_{current_user.id}_{level.id}_{int(datetime.utcnow().timestamp())}.{file.filename.rsplit('.', 1)[1].lower()}")
-        file_path = os.path.join(app.config.get('UPLOAD_FOLDER', '/tmp/uploads'), filename)
+        file_path = os.path.join(upload_dir, filename)
         file.save(file_path)
         
         if existing_sub:
