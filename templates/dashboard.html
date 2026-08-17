@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block title %}لوحة التحكم - منصة مستر محمد صابر{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Header Hero -->
+    <div class="dashboard-hero mb-4 p-4 text-white rounded-3 bg-primary bg-gradient shadow-sm">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+            <div>
+                <h2 class="fw-bold mb-1">أهلاً بك، {{ current_user.name }} 👋</h2>
+                <p class="mb-0 opacity-75">مرحباً بك في لوحة تحكم الطالب الخاصة بك.</p>
+            </div>
+            <div>
+                <span class="badge bg-light text-primary fs-6 px-3 py-2 rounded-pill shadow-sm">
+                    نسبة إنجاز الكورسات: {{ progress }}%
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Stats Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-3 p-3 text-center">
+                <h6 class="text-muted mb-1">الكورسات المشترك بها</h6>
+                <h3 class="fw-bold text-success mb-0">{{ active_count }}</h3>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-3 p-3 text-center">
+                <h6 class="text-muted mb-1">طلبات قيد المراجعة</h6>
+                <h3 class="fw-bold text-warning mb-0">{{ pending_count }}</h3>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-3 p-3 text-center">
+                <h6 class="text-muted mb-1">إجمالي المراحل</h6>
+                <h3 class="fw-bold text-primary mb-0">{{ levels|length }}</h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Main Courses Area -->
+        <div class="col-lg-8">
+            <h4 class="fw-bold mb-3">المراحل الدراسية والكورسات</h4>
+            <div class="row g-3">
+                {% for level in levels %}
+                {% set sub = user_subscriptions.get(level.id) %}
+                <div class="col-md-6">
+                    <div class="card h-100 border-0 shadow-sm rounded-3 overflow-hidden">
+                        <img src="{{ level.image_url }}" class="card-img-top" alt="{{ level.title }}" style="height: 160px; object-fit: cover;">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title fw-bold">{{ level.title }}</h5>
+                            <p class="card-text text-muted small flex-grow-1">{{ level.description or 'لا يوجد وصف متاح.' }}</p>
+                            
+                            <div class="pt-2 border-top mt-auto">
+                                {% if sub and sub.status == 'active' %}
+                                    <div class="d-flex align-items-center justify-content-between mb-2">
+                                        <span class="badge bg-success">نشط ومفعل</span>
+                                        <span class="fw-bold text-success">مجاني لك</span>
+                                    </div>
+                                    <a href="{{ url_for('level_detail', level_id=level.id) }}" class="btn btn-outline-primary w-100 btn-sm">عرض المحاضرات</a>
+                                {% elif sub and sub.status == 'pending' %}
+                                    <div class="alert alert-warning py-1 px-2 mb-2 text-center small">
+                                        جاري مراجعة إثبات الدفع...
+                                    </div>
+                                    <a href="{{ url_for('level_detail', level_id=level.id) }}" class="btn btn-secondary w-100 btn-sm disabled">بانتظار التفعيل</a>
+                                {% else %}
+                                    <div class="d-flex align-items-center justify-content-between mb-2">
+                                        <span class="text-muted small">سعر الاشتراك:</span>
+                                        <span class="fw-bold text-primary">{{ level.price }} ج.م</span>
+                                    </div>
+                                    <a href="{{ url_for('level_detail', level_id=level.id) }}" class="btn btn-primary w-100 btn-sm">اشترك الآن</a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="col-12">
+                    <div class="alert alert-info text-center">لا توجد مراحل دراسية متاحة حالياً.</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Sidebar Widgets -->
+        <div class="col-lg-4">
+            <!-- Assignments Widget -->
+            <div class="card border-0 shadow-sm rounded-3 mb-4">
+                <div class="card-header bg-white border-0 pt-3 px-3 d-flex justify-content-between align-items-center">
+                    <h5 class="fw-bold mb-0">أحدث الواجبات</h5>
+                    <a href="{{ url_for('student_assignments') }}" class="small text-decoration-none">عرض الكل</a>
+                </div>
+                <div class="card-body px-3 py-2">
+                    {% if upcoming_assignments %}
+                        <ul class="list-group list-group-flush">
+                            {% for assign in upcoming_assignments %}
+                            <li class="list-group-item px-0 border-0 mb-2">
+                                <div class="fw-semibold">{{ assign.title }}</div>
+                                <div class="text-muted small">المستوى: {{ assign.level.title }}</div>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted small my-2">لا توجد واجبات حديثة حالياً.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Quizzes Widget -->
+            <div class="card border-0 shadow-sm rounded-3">
+                <div class="card-header bg-white border-0 pt-3 px-3 d-flex justify-content-between align-items-center">
+                    <h5 class="fw-bold mb-0">أحدث الاختبارات</h5>
+                    <a href="{{ url_for('quizzes') }}" class="small text-decoration-none">عرض الكل</a>
+                </div>
+                <div class="card-body px-3 py-2">
+                    {% if upcoming_quizzes %}
+                        <ul class="list-group list-group-flush">
+                            {% for quiz in upcoming_quizzes %}
+                            <li class="list-group-item px-0 border-0 mb-2">
+                                <div class="fw-semibold">{{ quiz.title }}</div>
+                                <div class="text-muted small">عدد الأسئلة: {{ quiz.questions|length }}</div>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted small my-2">لا توجد اختبارات حصرية جديدة.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
