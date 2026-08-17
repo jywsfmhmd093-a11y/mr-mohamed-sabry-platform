@@ -96,7 +96,7 @@ def index():
     except Exception:
         levels = []
         stats = {'students': 1420, 'lectures': 85, 'levels': 0}
-    return render_template('index.html', levels=levels, stats=stats)
+    return redirect(url_for('login'))
 
 @app.route('/level/<int:level_id>')
 def level_detail(level_id):
